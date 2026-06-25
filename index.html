@@ -652,43 +652,60 @@ const AT_BASE  = "appgGQ3FzEgDHl8UY";   // ← replace with your Base ID (appXXX
 const AT_TABLE = "Elite Leads";
 
 async function submitForm(){
-  const name    = document.getElementById("cf-name").value.trim();
-  const email   = document.getElementById("cf-email").value.trim();
-  const msg     = document.getElementById("cf-msg").value.trim();
-  const checked = [...document.querySelectorAll(".sc:checked")];
+  const name     = document.getElementById("cf-name").value.trim();
+  const email    = document.getElementById("cf-email").value.trim();
+  const msg      = document.getElementById("cf-msg").value.trim();
+  const checked  = [...document.querySelectorAll(".sc:checked")];
   const services = checked.map(c=>c.value).join(", ");
 
-  if(!name)    return showMsg("err","Please enter your full name.");
+  if(!name)                        return showMsg("err","Please enter your full name.");
   if(!email||!email.includes("@")) return showMsg("err","Please enter a valid email address.");
-  if(!checked.length) return showMsg("err","Please select at least one service.");
-
-  if(AT_KEY==="YOUR_API_KEY"){
-    showMsg("err","Form not yet connected — Airtable keys needed. Come back after setup!");
-    return;
-  }
+  if(!checked.length)              return showMsg("err","Please select at least one service.");
 
   const btn = document.getElementById("cf-submit");
-  btn.disabled = true; btn.textContent = "Sending...";
+  btn.disabled = true;
+  btn.textContent = "Sending...";
+
+  const payload = {
+    fields: {
+      "Name":      name,
+      "Email":     email,
+      "Services":  services,
+      "Message":   msg || "(none)",
+      "Submitted": new Date().toISOString().split("T")[0]
+    }
+  };
 
   try{
-    const res = await fetch(`https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(AT_TABLE)}`,{
-      method:"POST",
-      headers:{"Authorization":"Bearer "+AT_KEY,"Content-Type":"application/json"},
-      body: JSON.stringify({fields:{"Name":name,"Email":email,"Services":services,"Message":msg||"(none)","Submitted":new Date().toISOString()}})
-    });
-    if(res.ok){
+    const res = await fetch(
+      "https://api.airtable.com/v0/" + AT_BASE + "/" + encodeURIComponent(AT_TABLE),
+      {
+        method:  "POST",
+        headers: {
+          "Authorization": "Bearer " + AT_KEY,
+          "Content-Type":  "application/json"
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await res.json();
+
+    if(res.ok && data.id){
       showMsg("ok","✓ Message received! We'll be in touch within 24 hours.");
       ["cf-name","cf-email","cf-msg"].forEach(id=>document.getElementById(id).value="");
       document.querySelectorAll(".sc").forEach(c=>c.checked=false);
-      btn.textContent="Sent ✓";
+      btn.textContent = "Sent ✓";
     } else {
-      const e = await res.json();
-      showMsg("err","Error: "+(e.error?.message||res.status));
-      btn.disabled=false; btn.textContent="Send Message →";
+      const errMsg = data.error ? data.error.type + ": " + data.error.message : "Unknown error ("+res.status+")";
+      showMsg("err","Airtable error — " + errMsg);
+      btn.disabled = false;
+      btn.textContent = "Send Message →";
     }
   } catch(e){
-    showMsg("err","Network error — please try again.");
-    btn.disabled=false; btn.textContent="Send Message →";
+    showMsg("err","Network error — " + e.message);
+    btn.disabled = false;
+    btn.textContent = "Send Message →";
   }
 }
 
